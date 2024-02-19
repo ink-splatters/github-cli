@@ -48,6 +48,7 @@ type Client struct {
 	GhPath  string
 	RepoDir string
 	GitPath string
+	GixPath string
 	Stderr  io.Writer
 	Stdin   io.Reader
 	Stdout  io.Writer
@@ -61,6 +62,7 @@ func (c *Client) Copy() *Client {
 		GhPath:  c.GhPath,
 		RepoDir: c.RepoDir,
 		GitPath: c.GitPath,
+		GixPath: c.GixPath,
 		Stderr:  c.Stderr,
 		Stdin:   c.Stdin,
 		Stdout:  c.Stdout,
@@ -79,8 +81,8 @@ func (c *Client) Command(ctx context.Context, args ...string) (*Command, error) 
 	}
 	var err error
 	c.mu.Lock()
-	if c.GitPath == "" {
-		c.GitPath, err = resolveGitPath()
+	if c.GitPath == "" || c.GixPath == "" {
+		c.GitPath, c.GixPath, err = resolveGitPath()
 	}
 	c.mu.Unlock()
 	if err != nil {
@@ -596,6 +598,8 @@ func (c *Client) Clone(ctx context.Context, cloneURL string, args []string, mods
 		target = path.Base(strings.TrimSuffix(cloneURL, ".git"))
 	}
 	cloneArgs = append([]string{"clone"}, cloneArgs...)
+	fmt.Println(cloneArgs)
+
 	cmd, err := c.AuthenticatedCommand(ctx, cloneArgs...)
 	if err != nil {
 		return "", err
@@ -610,11 +614,10 @@ func (c *Client) Clone(ctx context.Context, cloneURL string, args []string, mods
 	return target, nil
 }
 
-func resolveGitPath() (string, error) {
-	path, err := safeexec.LookPath("git")
+func resolvePath(programName string) (string, error) {
+	path, err := safeexec.LookPath(programName)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			programName := "git"
 			if runtime.GOOS == "windows" {
 				programName = "Git for Windows"
 			}
@@ -626,6 +629,19 @@ func resolveGitPath() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func resolveGitPath() (string, string, error) {
+    gitPath, err := resolvePath("git");
+
+    if err != nil {
+	    return "", "", err
+    }
+
+    gixPath, _ := resolvePath("gix");
+
+    return gitPath, gixPath, nil
+
 }
 
 func isFilesystemPath(p string) bool {
